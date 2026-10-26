@@ -83,3 +83,62 @@ form.addEventListener('submit', event => {
   const input = document.getElementById(id);
   input.addEventListener('input', () => input.setCustomValidity(''));
 });
+
+/* Fotos por hotlink con alternativa local si el CDN no responde. */
+document.querySelectorAll('[data-stock-image]').forEach(image => {
+  const useFallback = () => {
+    if (image.dataset.fallbackUsed) return;
+    image.dataset.fallbackUsed = 'true';
+    image.src = image.dataset.fallbackSrc;
+    image.alt = 'Ilustración de referencia de servicios técnicos';
+  };
+  image.addEventListener('error', useFallback);
+  if (image.complete && image.naturalWidth === 0) useFallback();
+});
+
+/* Entradas al hacer scroll, sin ocultar el contenido con CSS ni bloquearlo sin JS. */
+(() => {
+  const toggle = document.getElementById('motionToggle');
+  const label = document.getElementById('motionLabel');
+  const root = document.documentElement;
+  const reduced = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  const targets = [...document.querySelectorAll('.hero__content, .hero__visual, .section-header, .services__category, .steps li, .coverage__card, .location-note, .faq details, .contact__info, .contact__form-wrap')];
+  const active = new Set();
+  let paused = false;
+  let observer;
+
+  function configureMotion() {
+    if (observer) observer.disconnect();
+    active.forEach(animation => animation.cancel());
+    active.clear();
+    const enabled = !paused && !(reduced && reduced.matches);
+    root.classList.toggle('motion-enabled', enabled);
+    toggle.hidden = Boolean(reduced && reduced.matches);
+    toggle.setAttribute('aria-pressed', String(paused));
+    label.textContent = paused ? 'Activar animaciones' : 'Pausar animaciones';
+    if (!enabled || !('IntersectionObserver' in window)) return;
+    observer = new window.IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        observer.unobserve(entry.target);
+        if (typeof entry.target.animate !== 'function') return;
+        const animation = entry.target.animate(
+          [{ opacity: 0, transform: 'translateY(22px)' }, { opacity: 1, transform: 'translateY(0)' }],
+          { duration: 650, easing: 'cubic-bezier(.22,.61,.36,1)', fill: 'none' }
+        );
+        active.add(animation);
+        const release = () => active.delete(animation);
+        animation.onfinish = release;
+        animation.oncancel = release;
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -20px 0px' });
+    targets.forEach(target => observer.observe(target));
+  }
+
+  toggle.addEventListener('click', () => {
+    paused = !paused;
+    configureMotion();
+  });
+  if (reduced && typeof reduced.addEventListener === 'function') reduced.addEventListener('change', configureMotion);
+  configureMotion();
+})();
